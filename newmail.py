@@ -1,27 +1,26 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
+import json
+import mailbox
+import os
+import requests
 import signal
 import sys
-import requests
-import json
-from datetime import datetime, timedelta
+import time
 
-from fbchat import Client
-from fbchat.models import *
+from datetime import datetime, timedelta
 
 DEBUG = True
 LOG_FILENAME = "debug.log"
+MBOX = "/var/spool/mail/{}".format(os.getlogin())
 
-USER = "<your facebook login email>"
-PASSWORD = "<your facebook login password>"
-
-UBUNTU_ONE_URL = "https://push.ubports.com/notify"
+PUSH_URL = "https://push.ubports.com/notify"
 HEADERS = {"Content-Type" : "application/json"}
 
 card = {
     "icon" : "notification",
     "body" : "",
-    "summary" : "Messenger",
+    "summary" : "New mail",
     "popup" : True,
     "persist" : True
 }
@@ -38,7 +37,7 @@ data = {
 
 params = {
     "appid" : "pushclient.christianpauly_pushclient",
-    "token" : "<your ubuntu one app token>",
+    "token" : "YOUR_TOKEN",
     "expire_on" : "",
     "data" : data
 }
@@ -60,39 +59,42 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-class CustomClient(Client):
-    def onMessage(self, mid, author_id, message_object, thread_id, thread_type, ts, metadata, msg, **kwargs):
-        if not DEBUG and author_id == self.uid:
-            return
-        dt = datetime.now() + timedelta(days=1)
-        dt_str = dt.strftime("%Y-%m-%dT%H:%M:00.000Z")
-        if message_object:
-            if message_object.text:
-                body = message_object.text[:15]
-            else:
-                body = "Media content received"
-            params["expire_on"] = dt_str
-            params["data"]["notification"]["card"]["body"] = body
-            json_data = json.dumps(params)
-            log(f'Data sent:\n {json_data}\n')
-            r = requests.post(url=UBUNTU_ONE_URL, headers=HEADERS, data=json_data)
-            log(r.json())
+def send_message(msg):
+    dt = datetime.now() + timedelta(days=1)
+    dt_str = dt.strftime("%Y-%m-%dT%H:%M:00.000Z")
+    params["expire_on"] = dt_str
+    params["data"]["notification"]["card"]["body"] = msg
+    json_data = json.dumps(params)
+    log(f'Data sent:\n {json_data}\n')
+    r = requests.post(url=PUSH_URL, headers=HEADERS, data=json_data)
+    log(r.json())
 
 ##################### MAIN #####################
 if __name__ == "__main__":
 
     if DEBUG:
-        print(f'Loggin in: {LOG_FILENAME}')
+        print(f'Logging in: {LOG_FILENAME}')
         logfile = open(LOG_FILENAME, "a")
-
-    client = CustomClient(USER, PASSWORD)
-
-    log(f'User logged in: {client.isLoggedIn()}')
-    log(client.getSession())
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    client.listen()
-
-    Change <your facebook login email>, <your facebook login password>, and <your ubuntu one app token> strings to your own data respectively.
-    Set DEBUG global variable according to your needs to False or True.
+    seenmsgs = []
+    while True:
+        m = mailbox.mbox(MBOX)
+        newmsgs = []
+        for number, msg in m.iteritems():
+            flags = msg.get_flags()
+            msgid = msg.get("message-id")
+            if msgid in seenmsgs:
+                continue
+            author = msg.get("from")
+            subject = msg.get("subject")
+            seenmsgs.append(msgid)
+            if not "R" in flags:
+                print("adding one")
+                newmsgs.append("from {0} about {1}".format(author, subject))
+        if len(newmsgs) != 0:
+            body = "New messages:\n" + str(newmsgs)
+            print("Sending: {0}".format(body))
+            send_message(body)
+        time.sleep(15)

@@ -6,9 +6,14 @@ import os
 import requests
 import signal
 import sys
+import yaml
 import time
 
 from datetime import datetime, timedelta
+
+home = os.path.expanduser("~")
+with open("{0}/config.yml".format(home)) as f:
+    config = yaml.load(f)
 
 DEBUG = True
 LOG_FILENAME = "debug.log"
@@ -37,7 +42,7 @@ data = {
 
 params = {
     "appid" : "pushclient.christianpauly_pushclient",
-    "token" : "YOUR_TOKEN",
+    "token" : config['main']['token'],
     "expire_on" : "",
     "data" : data
 }

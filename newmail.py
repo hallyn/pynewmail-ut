@@ -83,13 +83,16 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    seenmsgs = []
+    reseenmsgs = []
     while True:
-        m = mailbox.mbox(MBOX)
+        seenmsgs = reseenmsgs
+        reseenmsgs = []
         newmsgs = []
+        m = mailbox.mbox(MBOX)
         for number, msg in m.iteritems():
             flags = msg.get_flags()
             msgid = msg.get("message-id")
+            reseenmsgs.append(msgid)
             if msgid in seenmsgs:
                 continue
             author = msg.get("from")
